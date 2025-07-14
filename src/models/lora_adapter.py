@@ -187,7 +187,7 @@ class LoRAConfig:
         ]
     
     def create_adapter(self) -> LoRAAdapter:
-        """Create LoRA adapter with this configuration."""
+        """create LoRA adapter with this config"""
         return LoRAAdapter(
             target_modules=self.target_modules,
             rank=self.rank,
