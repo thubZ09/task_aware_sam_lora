@@ -13,7 +13,7 @@ from datetime import datetime
 import wandb
 
 from src.training.loss import TaskAwareLoss
-from src.training.metrics import MetricsCalculator
+from src.training.metrics import SegmentationMetrics
 from src.utils.checkpoint import save_checkpoint, load_checkpoint
 from src.utils.visualization import visualize_predictions
 
@@ -49,7 +49,7 @@ class TaskAwareTrainer:
         os.makedirs(log_dir, exist_ok=True)
         
         self.criterion = TaskAwareLoss(config.get('loss', {}))#initialize training components
-        self.metrics = MetricsCalculator()
+        self.metrics = SegmentationMetrics()
         
         self.optimizer = self._create_optimizer()  #initialize optimizer
         self.scheduler = self._create_scheduler()

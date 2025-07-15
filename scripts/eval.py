@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.hypernetwork import TaskAwareHypernetwork
 from models.sam_lora import SAMLoRA
 from data.dataset import TaskAwareDataset
-from training.metrics import MetricsCalculator, calculate_mask_metrics
+from training.metrics import SegmentationMetrics, calculate_mask_metrics
 from utils.coco_utils import load_coco_categories
 
 logging.basicConfig(level=logging.INFO)
@@ -76,7 +76,7 @@ def evaluate_on_dataset(sam_lora: SAMLoRA, hypernetwork: TaskAwareHypernetwork,
     sam_lora.eval()
     hypernetwork.eval()
     
-    metrics_calc = MetricsCalculator()
+    metrics_calc = SegmentationMetrics()
     all_metrics = []
     
     #apply LoRA for this task
@@ -135,7 +135,7 @@ def evaluate_baseline(sam_lora: SAMLoRA, dataset: TaskAwareDataset,
     sam_lora.eval()
     sam_lora.remove_lora()  #remove any LoRA adapters
     
-    metrics_calc = MetricsCalculator()
+    metrics_calc = SegmentationMetrics()
     all_metrics = []
     
     logger.info("evaluating baseline SAM (no LoRA)")
