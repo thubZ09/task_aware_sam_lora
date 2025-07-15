@@ -5,7 +5,7 @@ from .text_processing import (
     batch_encode_texts
 )
 
-from .visualization import (
+from .visual import (
     show_mask,
     show_points,
     show_box,
