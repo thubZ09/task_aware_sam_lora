@@ -49,7 +49,7 @@ class TaskAwareTrainer:
         os.makedirs(log_dir, exist_ok=True)
         
         self.criterion = TaskAwareLoss(config.get('loss', {}))#initialize training components
-        self.metrics = SegmentationMetrics()
+        self.metrics = MetricsCalculator()
         
         self.optimizer = self._create_optimizer()  #initialize optimizer
         self.scheduler = self._create_scheduler()
