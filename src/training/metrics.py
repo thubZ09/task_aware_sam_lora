@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class MetricsCalculator:
+class SegmentationMetrics:
     """calculate segmentation metrics with LoRA adapters"""
     
     def __init__(self, num_classes: int = 80, ignore_index: int = -1):
