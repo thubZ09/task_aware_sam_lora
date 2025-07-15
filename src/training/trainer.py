@@ -13,7 +13,7 @@ from datetime import datetime
 import wandb
 
 from src.training.loss import TaskAwareLoss
-from src.training.metrics import SegmentationMetrics
+from src.training.metrics import MetricsCalculator
 from src.utils.checkpoint import save_checkpoint, load_checkpoint
 from src.utils.visualization import visualize_predictions
 
