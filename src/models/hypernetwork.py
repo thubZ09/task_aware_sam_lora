@@ -319,39 +319,41 @@ class TaskAwareHyperNet(nn.Module):
         return hypernet
 
 def create_sam_lora_config(mask_decoder) -> Dict[str, Tuple[int, int]]:
-    """create LoRA config"""
+    import torch.nn as nn
     lora_config = {}
-    
-    #define target modules for SAM mask decoder
     target_modules = [
-        "output_upscaling.0",
-        "output_upscaling.1",
-        "output_hypernetworks_mlps.0",
-        "output_hypernetworks_mlps.1",
-        "output_hypernetworks_mlps.2",
-        "output_hypernetworks_mlps.3",
-        "iou_prediction_head.0",
-        "iou_prediction_head.1",
-        "iou_prediction_head.2"
+        "output_hypernetworks_mlps.0.layers.0",
+        "output_hypernetworks_mlps.0.layers.1",
+        "output_hypernetworks_mlps.0.layers.2",
+        "output_hypernetworks_mlps.1.layers.0",
+        "output_hypernetworks_mlps.1.layers.1",
+        "output_hypernetworks_mlps.1.layers.2",
+        "output_hypernetworks_mlps.2.layers.0",
+        "output_hypernetworks_mlps.2.layers.1",
+        "output_hypernetworks_mlps.2.layers.2",
+        "output_hypernetworks_mlps.3.layers.0",
+        "output_hypernetworks_mlps.3.layers.1",
+        "output_hypernetworks_mlps.3.layers.2",
+        "iou_prediction_head.layers.0",
+        "iou_prediction_head.layers.1",
+        "iou_prediction_head.layers.2"
     ]
-    
-    #extract layer dimensions
     for module_name in target_modules:
         try:
-            #navigate to the module
             module = mask_decoder
             for part in module_name.split('.'):
-                if part.isdigit():
+                if part.isdigit() and isinstance(module, (list, nn.ModuleList, nn.Sequential)):
                     module = module[int(part)]
-                else:
+                elif hasattr(module, part):
                     module = getattr(module, part)
-            
-            #check if it's a linear layer
+                else:
+                    raise AttributeError(f"Module {type(module)} at {module_name} does not have attribute or index '{part}'")
+            #get the original_layer
+            if hasattr(module, "original_layer"):
+                module = module.original_layer
             if isinstance(module, nn.Linear):
                 lora_config[module_name] = (module.in_features, module.out_features)
-                print(f"Added {module_name}: {module.in_features} -> {module.out_features}")
-        
-        except (AttributeError, IndexError):
-            print(f"Warning: Could not find module {module_name}")
-    
+                print(f"Added LoRA to: {module_name} ({module.in_features}→{module.out_features})")
+        except Exception as e:
+            print(f"Could not find {module_name}: {e}")
     return lora_config
