@@ -1,5 +1,5 @@
 from .base_config import BaseConfig, ModelConfig, DataConfig, TrainingConfig, SystemConfig
-from .training_config import get_t4_optimized_config, get_demo_config, get_debug_config
+from .train_config import get_t4_optimized_config, get_demo_config, get_debug_config
 
 __all__ = [
     'BaseConfig',

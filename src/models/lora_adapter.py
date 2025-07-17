@@ -41,11 +41,10 @@ class LoRALayer(nn.Module):
         x = x.view(-1, x.size(-1))
         lora_out = x @ self.lora_A @ self.lora_B * self.scaling
         lora_out = self.dropout(lora_out)
-        
         return lora_out.view(original_shape)
 
 class LoRALinear(nn.Module):
-    """linear layer with LoRA adaptatio"""
+    """linear layer with LoRA adaptation"""
     
     def __init__(
         self,
@@ -90,33 +89,39 @@ class LoRAAdapter(nn.Module):
         self.alpha = alpha
         self.dropout = dropout
         
-        #storing LoRA layers
         self.lora_layers = nn.ModuleDict()
+        self.name_map = {}
         
     def get_lora_params(self) -> Dict[str, torch.Tensor]:
         """get all LoRA parameters as a dictionary"""
         params = {}
-        for name, layer in self.lora_layers.items():
-            params[f"{name}.lora_A"] = layer.lora_A
-            params[f"{name}.lora_B"] = layer.lora_B
+        for sanitized, layer in self.lora_layers.items():
+            params[f"{sanitized}.lora_A"] = layer.lora_A
+            params[f"{sanitized}.lora_B"] = layer.lora_B
         return params
     
     def set_lora_params(self, params: Dict[str, torch.Tensor]):
         """set LoRA parameters from dictionary"""
-        for name, layer in self.lora_layers.items():
-            if f"{name}.lora_A" in params:
-                layer.lora_A.data = params[f"{name}.lora_A"]
-            if f"{name}.lora_B" in params:
-                layer.lora_B.data = params[f"{name}.lora_B"]
+        for sanitized, layer in self.lora_layers.items():
+            key_a = f"{sanitized}.lora_A"
+            key_b = f"{sanitized}.lora_B"
+            if key_a in params:
+                layer.lora_A.data = params[key_a]
+            if key_b in params:
+                layer.lora_B.data = params[key_b]
     
     def add_lora_to_model(self, model: nn.Module):
         """add LoRA layers to target modules in the model"""
-        
+
+        def matches_target(targets, name):
+            # match if any target is a substring or exact
+            return any(target in name for target in targets)
+
         def replace_linear_with_lora(module, name=""):
             for child_name, child in module.named_children():
                 full_name = f"{name}.{child_name}" if name else child_name
-                
-                if isinstance(child, nn.Linear) and any(target in full_name for target in self.target_modules):
+
+                if isinstance(child, nn.Linear) and matches_target(self.target_modules, full_name):
                     #replace with LoRA linear
                     lora_linear = LoRALinear(
                         original_layer=child,
@@ -126,16 +131,18 @@ class LoRAAdapter(nn.Module):
                     )
                     setattr(module, child_name, lora_linear)
                     
-                    self.lora_layers[full_name] = lora_linear.lora
-                    
-                    print(f"Added LoRA to: {full_name}")
+                    sanitized = full_name.replace('.', '_')
+                    self.lora_layers[sanitized] = lora_linear.lora
+                    self.name_map[sanitized] = full_name
+
+                    print(f"Added LoRA to: {full_name} (as {sanitized})")
                 
                 else:
                     replace_linear_with_lora(child, full_name)
         
         replace_linear_with_lora(model)
         
-        print(f"added LoRA to {len(self.lora_layers)} layers")
+        print(f"Added LoRA to {len(self.lora_layers)} layers")
         return model
     
     def enable_lora(self):
