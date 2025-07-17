@@ -4,11 +4,12 @@ import numpy as np
 from PIL import Image
 import json
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Sequence
 import cv2
 from pycocotools.coco import COCO
 from pycocotools import mask as coco_mask
 import random
+
 
 class TaskAwareDataset(Dataset):
     """dataset with textual descriptions"""
@@ -125,6 +126,10 @@ class TaskAwareDataset(Dataset):
         # Apply transforms
         if self.transform:
             image = self.transform(image)
+        else:
+            # Ensures image is always a tensor for DataLoader, even if no transform is provided
+            from torchvision import transforms
+            image = transforms.ToTensor()(image)
 
         return {
             'image': image,
@@ -153,21 +158,31 @@ class TaskAwareDataset(Dataset):
 
         return template.format(enhanced_name)
 
-    def _create_category_mask(self, annotations: List[Dict], category_id: int, img_info: Dict) -> np.ndarray:
+    def _create_category_mask(self, annotations, category_id: int, img_info) -> np.ndarray:
         mask = np.zeros((img_info['height'], img_info['width']), dtype=np.uint8)
 
         for ann in annotations:
             if ann['category_id'] == category_id:
-                if 'segmentation' in ann:
-                    if isinstance(ann['segmentation'], list):
-                        # Polygon format
-                        for seg in ann['segmentation']:
-                            poly = np.array(seg).reshape(-1, 2)
-                            cv2.fillPoly(mask, [poly.astype(np.int32)], 1)
-                    elif isinstance(ann['segmentation'], dict) and 'counts' in ann['segmentation']:
-                        # RLE format
-                        rle = ann['segmentation']
-                        m = coco_mask.decode(rle)
+                segm = ann.get('segmentation', None)
+                if segm is None:
+                    continue
+                # Polygon format
+                if isinstance(segm, list) and segm and isinstance(segm[0], list):
+                    for seg in segm:
+                        poly = np.array(seg).reshape(-1, 2)
+                        cv2.fillPoly(mask, [poly.astype(np.int32)], 1)
+                # RLE format (dict)
+                elif isinstance(segm, dict) and 'counts' in segm:
+                    m = coco_mask.decode(segm)  # type: ignore
+                    if m.ndim == 3:
+                        m = m[:, :, 0]
+                    mask = np.logical_or(mask, m).astype(np.uint8)
+                # RLE format (list of dicts)
+                elif isinstance(segm, list) and segm and isinstance(segm[0], dict):
+                    for rle in segm:
+                        m = coco_mask.decode(rle)  # type: ignore
+                        if m.ndim == 3:
+                            m = m[:, :, 0]
                         mask = np.logical_or(mask, m).astype(np.uint8)
         return mask
 
