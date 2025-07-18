@@ -20,6 +20,11 @@ class LoRALayer(nn.Module):
         self.rank = rank
         self.alpha = alpha
         self.scaling = alpha / rank
+        self.in_features = in_features
+        self.out_features = out_features
+        self.rank = rank
+        self.alpha = alpha
+        self.scaling = alpha / rank
         
         #LoRA matrices
         self.lora_A = nn.Parameter(torch.randn(in_features, rank) * 0.01)
