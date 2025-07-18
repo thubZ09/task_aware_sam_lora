@@ -10,6 +10,7 @@ import cv2
 from pycocotools.coco import COCO
 from pycocotools import mask as coco_mask
 import random
+from pycocotools import mask as coco_mask
 
 class TaskAwareDataset(Dataset):
     """dataset with textual descriptions"""
@@ -167,9 +168,12 @@ class TaskAwareDataset(Dataset):
                         cv2.fillPoly(mask, [poly.astype(np.int32)], 1)
                 elif isinstance(segm, dict) and 'counts' in segm:
                     if isinstance(segm['counts'], list):
-                        segm = segm.copy()
-                        segm['counts'] = ''.join(str(x) for x in segm['counts']).encode('utf-8')
-                    m = coco_mask.decode(segm)
+                        rle = coco_mask.frPyObjects(segm, img_info['height'], img_info['width'])
+                    else:
+                        # already compressed RLE with counts as bytes
+                        rle = segm
+
+                    m = coco_mask.decode(rle)
                     if m.ndim == 3:
                         m = m[:, :, 0]
                     mask = np.logical_or(mask, m).astype(np.uint8)
