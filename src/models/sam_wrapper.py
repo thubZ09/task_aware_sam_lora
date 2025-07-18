@@ -88,15 +88,34 @@ class SAMWithLoRA(nn.Module):
         has_mask_input: Optional[torch.Tensor] = None,
         multimask_output: bool = True
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """sorward pass through SAM with LoRA"""
+        """Forward pass through SAM with LoRA"""
         
-        #use SAM's mask decoder
+        # Prepare points for prompt encoder
+        if point_coords is not None and point_labels is not None:
+            # Ensure points are in correct format
+            points = (point_coords, point_labels)
+        else:
+            points = None
+        
+        # Prepare boxes (None for now, can be extended)
+        boxes = None
+        
+        # Prepare masks for prompt encoder
+        masks = mask_input
+        
+        # Get sparse and dense prompt embeddings
+        sparse_embeddings, dense_embeddings = self.sam.prompt_encoder(
+            points=points,
+            boxes=boxes,
+            masks=masks,
+        )
+        
+        # Use SAM's mask decoder
         masks, iou_predictions = self.sam.mask_decoder(
             image_embeddings=image_embeddings,
             image_pe=self.sam.prompt_encoder.get_dense_pe(),
-            sparse_prompt_embeddings=self.sam.prompt_encoder(
-                point_coords, point_labels) if point_coords is not None else (None, None)[0],
-            dense_prompt_embeddings=mask_input,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output
         )
         
