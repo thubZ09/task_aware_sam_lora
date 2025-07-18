@@ -33,9 +33,7 @@ class SAMWithLoRA(nn.Module):
         if lora_config is None:
             lora_config = LoRAConfig()
         self.lora_adapter = lora_config.create_adapter()
-        
-        # add LoRA to mask decoder
-        self.sam.mask_decoder = self.lora_adapter.add_lora_to_model(self.sam.mask_decoder)
+        self.sam.mask_decoder = self.lora_adapter.add_lora_to_model(self.sam.mask_decoder).to(self.device)
         
         # create predictor for inference
         self.predictor = SamPredictor(self.sam)
