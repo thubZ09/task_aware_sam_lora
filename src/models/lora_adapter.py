@@ -1,3 +1,4 @@
+#src/models/lora_adapter.py
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional, Tuple
@@ -37,11 +38,13 @@ class LoRALayer(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """forward pass through LoRA layer"""
-        original_shape = x.shape
-        x = x.view(-1, x.size(-1))
-        lora_out = x @ self.lora_A @ self.lora_B * self.scaling
+        # x shape: [..., in_features]
+        # we need to output [..., out_features]
+        batch_shape = x.shape[:-1]                # e.g. [batch, tokens, ...]
+        x_flat = x.view(-1, self.in_features)     # [N, in_features]
+        lora_out = (x_flat @ self.lora_A @ self.lora_B) * self.scaling
         lora_out = self.dropout(lora_out)
-        return lora_out.view(original_shape)
+        return lora_out.view(*batch_shape, self.out_features)
 
 class LoRALinear(nn.Module):
     """linear layer with LoRA adaptation"""
