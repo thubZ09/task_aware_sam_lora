@@ -1,3 +1,4 @@
+#src/data/dataset.py
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -167,7 +168,7 @@ class TaskAwareDataset(Dataset):
                 elif isinstance(segm, dict) and 'counts' in segm:
                     if isinstance(segm['counts'], list):
                         segm = segm.copy()
-                        segm['counts'] = ''.join(segm['counts']).encode('utf-8')
+                        segm['counts'] = ''.join(str(x) for x in segm['counts']).encode('utf-8')
                     m = coco_mask.decode(segm)
                     if m.ndim == 3:
                         m = m[:, :, 0]
