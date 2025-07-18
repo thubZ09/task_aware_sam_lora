@@ -21,9 +21,8 @@ def get_t4_optimized_config() -> BaseConfig:
     )
     
     data_config = DataConfig(
-        #batch size
         max_samples=10000,
-        num_workers=2, 
+        num_workers=4, 
         pin_memory=True,
         
         image_size=1024,  
@@ -32,7 +31,7 @@ def get_t4_optimized_config() -> BaseConfig:
     )
     
     training_config = TrainingConfig(
-        batch_size=4,  
+        batch_size=1,  
         num_epochs=2,
         learning_rate=5e-5, 
         weight_decay=0.01,
@@ -89,8 +88,8 @@ def get_debug_config() -> BaseConfig:
     base_config = get_t4_optimized_config()
     
     base_config.data.max_samples = 100
-    base_config.training.batch_size = 2
-    base_config.training.num_epochs = 1
+    base_config.training.batch_size = 1
+    base_config.training.num_epochs = 2
     base_config.training.val_interval = 10
     base_config.training.save_interval = 20
     base_config.system.log_level = "DEBUG"

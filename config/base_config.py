@@ -73,7 +73,7 @@ class TrainingConfig:
     """for training process."""
     
     #training parameters
-    batch_size: int = 8
+    batch_size: int = 1
     num_epochs: int = 2
     learning_rate: float = 1e-4
     weight_decay: float = 0.01
@@ -100,7 +100,7 @@ class TrainingConfig:
 
 @dataclass
 class SystemConfig:
-    """Configuration for system and hardware."""
+    """Config for system and hardware."""
     
     # Device settings
     device: str = "cuda"
@@ -127,7 +127,7 @@ class SystemConfig:
 
 @dataclass
 class BaseConfig:
-    """Main configuration class combining all sub-configs."""
+    """main config class combining all sub-configs"""
     
     model: ModelConfig = field(default_factory=ModelConfig)
     data: DataConfig = field(default_factory=DataConfig)
@@ -135,8 +135,7 @@ class BaseConfig:
     system: SystemConfig = field(default_factory=SystemConfig)
     
     def __post_init__(self):
-        """Post-initialization setup."""
-        # Create directories
+        """post-initialization setup."""
         os.makedirs(self.system.checkpoint_dir, exist_ok=True)
         os.makedirs(self.system.output_dir, exist_ok=True)
         os.makedirs(self.system.log_dir, exist_ok=True)
@@ -146,7 +145,7 @@ class BaseConfig:
         self._validate_config()
     
     def _validate_config(self):
-        """Validate configuration values."""
+        """validate configuration values"""
         assert self.model.lora_rank > 0, "LoRA rank must be positive"
         assert self.model.lora_alpha > 0, "LoRA alpha must be positive"
         assert self.training.batch_size > 0, "Batch size must be positive"
@@ -154,7 +153,7 @@ class BaseConfig:
         assert self.data.max_samples > 0, "Max samples must be positive"
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary for logging."""
+        """convert config to dictionary for logging"""
         return {
             "model": self.model.__dict__,
             "data": self.data.__dict__,
@@ -163,14 +162,13 @@ class BaseConfig:
         }
     
     def save(self, path: str):
-        """Save configuration to file."""
         import json
         with open(path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2)
     
     @classmethod
     def load(cls, path: str) -> 'BaseConfig':
-        """Load configuration from file."""
+        """load config from file"""
         import json
         with open(path, 'r') as f:
             data = json.load(f)
