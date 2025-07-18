@@ -20,7 +20,7 @@ class TaskAwareDataset(Dataset):
         max_samples: int = None,
         transform=None,
         task_templates: Optional[List[str]] = None,
-        mode: str = "instance",  # "instance" or "panoptic"
+        mode: str = "instance",  
     ):
         self.data_dir = data_dir
         self.split = split
@@ -83,13 +83,29 @@ class TaskAwareDataset(Dataset):
         image_id = self.image_ids[idx]
         img_info = self.coco.imgs[image_id]
         split_folder = f"{self.split}2017"
-        img_path = os.path.join(self.data_dir, "images", split_folder, img_info['file_name'])
+        
+        # Fixed image path construction
+        img_path = os.path.join(self.data_dir, split_folder, img_info['file_name'])
+        
+        # If the direct path doesn't exist, try alternative paths
         if not os.path.exists(img_path):
-            # Try Kaggle dataset structure
-            img_path = os.path.join("/kaggle/input/coco-2017-dataset/train2017", img_info['file_name'])
+            # Try with images subfolder (original COCO structure)
+            img_path = os.path.join(self.data_dir, "images", split_folder, img_info['file_name'])
+            
             if not os.path.exists(img_path):
-                # Try val split
-                img_path = os.path.join("/kaggle/input/coco-2017-dataset/val2017", img_info['file_name'])
+                # Try Kaggle dataset structure with coco2017 folder
+                img_path = os.path.join("/kaggle/input/coco-2017-dataset/coco2017", split_folder, img_info['file_name'])
+                
+                if not os.path.exists(img_path):
+                    # Final fallback - direct Kaggle paths
+                    if self.split == "train":
+                        img_path = os.path.join("/kaggle/input/coco-2017-dataset/coco2017/train2017", img_info['file_name'])
+                    else:
+                        img_path = os.path.join("/kaggle/input/coco-2017-dataset/coco2017/val2017", img_info['file_name'])
+                    
+                    if not os.path.exists(img_path):
+                        raise FileNotFoundError(f"Image not found: {img_info['file_name']} in any of the expected locations")
+        
         image = Image.open(img_path).convert('RGB')
 
         ann_ids = self.coco.getAnnIds(imgIds=image_id)
