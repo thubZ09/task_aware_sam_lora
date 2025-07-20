@@ -77,11 +77,17 @@ from pycocotools.cocoeval import COCOeval
 ## 📌Learned concepts
 
 - **PyTorch** (Model building, training loops, mixed‑precision `torch.cuda.amp`, DataLoaders).
+
 - **Segment Anything (SAM)** - frozen ViT‑H image encoder + mask decoder, wrapped it in `SamWrapper` to inject LoRA adapters.
-- **LoRA (Low-Rank Adaptation)** for efficient tuning
+
+- **LoRA (Low-Rank Adaptation)** for efficient tuning.
+
 - **Hypernetworks** that generate weights on-the-fly - tiny transformer (4 layers, 8 heads, 512 d) that ingests text embeddings (from sentence-transformers/all‑MiniLM‑L6‑v2) and outputs a dictionary of LoRA weight tensors.
+
 - COCO instance annotations + pycocotools
+
 - Visualization tools (matplotlib, overlay masks)
+
 - Efficient training on constrained hardware (T4, batch=1)
 
 ---
