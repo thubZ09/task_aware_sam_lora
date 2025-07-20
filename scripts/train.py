@@ -3,315 +3,160 @@ import sys
 import argparse
 import logging
 from pathlib import Path
+
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
-from tqdm import tqdm
-import json
 
-sys.path.append(str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.resolve()
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from src.models.hypernetwork import TaskAwareHyperNet
-from src.models.sam_wrapper import SAMWithLoRA
+#modules
+from config.train_config import get_t4_optimized_config
 from src.data.dataset import TaskAwareDataset
-from src.data.coco_loader import COCOPanopticDataset
-from src.training.trainer import HyperNetTrainer
-from src.utils.text_processing import TextEncoder, create_coco_task_descriptions
+from src.models.sam_wrapper import SAMWithLoRA
+from src.models.hypernetwork import TaskAwareHyperNet
+from src.training.trainer import TaskAwareTrainer
 from src.utils.checkpoint import CheckpointManager, create_config_backup
-from config.training_config import TrainingConfig
 
-def setup_logging(log_level: str = "INFO"):
-    """setup logging config"""
+def setup_logger(level: str):
     logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('training.log')
-        ]
+        level=getattr(logging, level.upper()),
+        format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
     )
 
 def parse_args():
-    """parse command line arguments"""
-    parser = argparse.ArgumentParser(description='train Task-Aware SAM LoRA')
-    
-    parser.add_argument('--config', type=str, default='config/training_config.py',
-                       help='Path to config file')
-    parser.add_argument('--epochs', type=int, default=None,
-                       help='Number of epochs (overrides config)')
-    parser.add_argument('--batch_size', type=int, default=None,
-                       help='Batch size (overrides config)')
-    parser.add_argument('--lr', type=float, default=None,
-                       help='Learning rate (overrides config)')
-    parser.add_argument('--resume', type=str, default=None,
-                       help='Path to checkpoint to resume from')
-    parser.add_argument('--data_dir', type=str, default='data/coco_panoptic',
-                       help='Path to data directory')
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints',
-                       help='Directory to save checkpoints')
-    parser.add_argument('--log_level', type=str, default='INFO',
-                       choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
-                       help='Logging level')
-    parser.add_argument('--wandb', action='store_true',
-                       help='Enable wandb logging')
-    parser.add_argument('--wandb_project', type=str, default='task-aware-sam-lora',
-                       help='Wandb project name')
-    
-    return parser.parse_args()
-
-def load_config(config_path: str) -> TrainingConfig:
-    """load training config"""
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    
-    #import config module
-    spec = importlib.util.spec_from_file_location("config", config_path)
-    config_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(config_module)
-    
-    return config_module.TrainingConfig()
-
-def create_datasets(config: TrainingConfig, data_dir: str):
-    """Create training and validation datasets."""
-    #create task descriptions
-    task_descriptions = create_coco_task_descriptions()
-    
-    #create datasets
-    train_dataset = COCOPanopticDataset(
-        data_dir=data_dir,
-        split='train',
-        task_descriptions=task_descriptions,
-        transforms=config.train_transforms,
-        max_samples=config.max_train_samples
-    )
-    
-    val_dataset = COCOPanopticDataset(
-        data_dir=data_dir,
-        split='val',
-        task_descriptions=task_descriptions,
-        transforms=config.val_transforms,
-        max_samples=config.max_val_samples
-    )
-    
-    #create data loaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.batch_size,
-        shuffle=True,
-        num_workers=config.num_workers,
-        pin_memory=True,
-        collate_fn=train_dataset.collate_fn
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=config.batch_size,
-        shuffle=False,
-        num_workers=config.num_workers,
-        pin_memory=True,
-        collate_fn=val_dataset.collate_fn
-    )
-    
-    return train_loader, val_loader
-
-def create_models(config: TrainingConfig, device: str):
-    """Create and initialize models."""
-    #text encoder
-    text_encoder = TextEncoder(
-        model_name=config.text_encoder_model,
-        hidden_dim=config.text_embedding_dim
-    ).to(device)
-    
-    #hypernetwork
-    hypernetwork = TaskAwareHyperNet(
-     text_dim=config.text_embedding_dim,
-     hidden_dim=config.hypernetwork_hidden_dim,
-     num_layers=config.hypernetwork_layers,
-     num_heads=config.hypernetwork_heads,
-     lora_rank=config.lora_rank,
-     target_layers=config.target_layers
-    ) .to(device)
-    
-    #SAM with LoRA
-    sam_model = SAMWithLoRA(
-        checkpoint_path=config.sam_checkpoint_path,
-        lora_rank=config.lora_rank,
-        target_layers=config.target_layers
-    ).to(device)
-    
-    return text_encoder, hypernetwork, sam_model
+    p = argparse.ArgumentParser(description="Train Task‑Aware SAM LoRA")
+    p.add_argument("--epochs",       type=int,   help="Override num_epochs")
+    p.add_argument("--batch-size",   type=int,   help="Override batch_size")
+    p.add_argument("--lr",           type=float, help="Override learning rate")
+    p.add_argument("--resume",       type=str,   help="Path to checkpoint to resume from")
+    p.add_argument("--use-wandb",    action="store_true", help="Enable Weights & Biases")
+    return p.parse_args()
 
 def main():
-    """main training function."""
     args = parse_args()
-    
-    #setup logging
-    setup_logging(args.log_level)
-    logger = logging.getLogger(__name__)
-    
-    #load config
-    config = load_config(args.config)
-    
-    #override config with command line args
-    if args.epochs is not None:
-        config.epochs = args.epochs
-    if args.batch_size is not None:
-        config.batch_size = args.batch_size
-    if args.lr is not None:
-        config.learning_rate = args.lr
-    
-    #create directories
-    os.makedirs(args.checkpoint_dir, exist_ok=True)
-    
-    #setup device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    cfg = get_t4_optimized_config()
+
+    #apply overrides
+    if args.epochs: cfg.training.num_epochs = args.epochs
+    if args.batch_size:cfg.training.batch_size = args.batch_size
+    if args.lr: cfg.training.learning_rate = args.lr
+
+    setup_logger(cfg.system.log_level)
+    logger = logging.getLogger("train")
+    device = torch.device(cfg.system.device if torch.cuda.is_available() else "cpu")
+
     logger.info(f"Using device: {device}")
-    
-    #initialize wandb
-    if args.wandb:
+
+    #init wandb
+    if args.use_wandb:
         wandb.init(
-            project=args.wandb_project,
-            config=config.__dict__,
-            name=f"task-aware-sam-lora-{config.experiment_name}"
+            project=cfg.system.wandb_project,
+            config=cfg.to_dict(),
+            name=f"train_{Path.cwd().name}"
         )
-    
-    #create datasets
-    logger.info("Creating datasets...")
-    train_loader, val_loader = create_datasets(config, args.data_dir)
-    logger.info(f"Train samples: {len(train_loader.dataset)}")
-    logger.info(f"Val samples: {len(val_loader.dataset)}")
-    
-    #create models
-    logger.info("Creating models...")
-    text_encoder, hypernetwork, sam_model = create_models(config, device)
-    
-    #log model info
-    total_params = sum(p.numel() for p in hypernetwork.parameters())
-    trainable_params = sum(p.numel() for p in hypernetwork.parameters() if p.requires_grad)
-    logger.info(f"Hypernetwork parameters: {total_params:,} (trainable: {trainable_params:,})")
-    
-    #create optimizer
+
+    #make checkpoint dir
+    os.makedirs(cfg.system.checkpoint_dir, exist_ok=True)
+    create_config_backup(cfg.to_dict(), cfg.system.checkpoint_dir)
+
+    #dataset + dataloader
+    logger.info("Building datasets…")
+    train_ds = TaskAwareDataset(cfg.data, split="train")
+    val_ds   = TaskAwareDataset(cfg.data, split="val")
+    train_loader = DataLoader(
+        train_ds, batch_size=cfg.training.batch_size,
+        shuffle=True, num_workers=cfg.system.dataloader_workers,
+        pin_memory=cfg.data.pin_memory, collate_fn=train_ds.collate_fn
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=cfg.training.batch_size,
+        shuffle=False, num_workers=cfg.system.dataloader_workers,
+        pin_memory=cfg.data.pin_memory, collate_fn=val_ds.collate_fn
+    )
+
+    #models
+    logger.info("Building models…")
+    sam_model = SamWrapper(
+        sam_model_type=cfg.model.sam_model_type,
+        sam_checkpoint=cfg.model.sam_checkpoint,
+        lora_rank=cfg.model.lora_rank,
+        lora_alpha=cfg.model.lora_alpha,
+        lora_dropout=cfg.model.lora_dropout,
+        target_modules=cfg.model.lora_target_modules
+    ).to(device)
+
+    hypernet = TaskAwareHyperNet(
+        text_encoder_model=cfg.model.text_encoder_model,
+        text_embedding_dim=cfg.model.text_embedding_dim,
+        hidden_dim=cfg.model.hypernetwork_hidden_dim,
+        num_layers=cfg.model.hypernetwork_num_layers,
+        num_heads=cfg.model.hypernetwork_num_heads,
+        dropout=cfg.model.hypernetwork_dropout,
+        max_lora_params=cfg.model.hypernetwork_max_lora_params
+    ).to(device)
+
+    #trainer & checkpoint manager
     optimizer = torch.optim.AdamW(
-        hypernetwork.parameters(),
-        lr=config.learning_rate,
-        weight_decay=config.weight_decay
+        hypernet.parameters(),
+        lr=cfg.training.learning_rate,
+        weight_decay=cfg.training.weight_decay
     )
-    
-    #create scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=config.epochs,
-        eta_min=config.min_learning_rate
+        optimizer, T_max=cfg.training.num_epochs
     )
-    
-    #create checkpoint manager
-    checkpoint_manager = CheckpointManager(
-        checkpoint_dir=args.checkpoint_dir,
-        max_checkpoints=config.max_checkpoints
-    )
-    
-    #create trainer
+
     trainer = HyperNetTrainer(
-        hypernetwork=hypernetwork,
-        text_encoder=text_encoder,
+        hypernetwork=hypernet,
         sam_model=sam_model,
         optimizer=optimizer,
         scheduler=scheduler,
-        device=device,
-        config=config
+        cfg=cfg,
+        device=device
     )
-    
-    #resume from checkpoint if specified
+    ckpt_mgr = CheckpointManager(
+        checkpoint_dir=cfg.system.checkpoint_dir,
+        max_checkpoints=cfg.training.max_checkpoints
+    )
+
     start_epoch = 0
     if args.resume:
-        logger.info(f"Resuming from checkpoint: {args.resume}")
-        checkpoint_data = checkpoint_manager.load_checkpoint(
-            args.resume, hypernetwork, optimizer, device
+        logger.info(f"Resuming from {args.resume}")
+        ckpt = ckpt_mgr.load_checkpoint(
+            args.resume, hypernet, optimizer, device
         )
-        start_epoch = checkpoint_data['epoch'] + 1
-        logger.info(f"Resuming from epoch {start_epoch}")
-    
-    #save config backup
-    create_config_backup(config.__dict__, args.checkpoint_dir)
-    
+        start_epoch = ckpt["epoch"] + 1
+
     #training loop
-    logger.info("Starting training...")
-    best_val_loss = float('inf')
-    
-    for epoch in range(start_epoch, config.epochs):
-        logger.info(f"Epoch {epoch + 1}/{config.epochs}")
-        
-        #training phase
+    best_loss = float("inf")
+    for epoch in range(start_epoch, cfg.training.num_epochs):
+        logger.info(f"Epoch {epoch+1}/{cfg.training.num_epochs}")
         train_metrics = trainer.train_epoch(train_loader, epoch)
-        
-        #validation phase
-        val_metrics = trainer.validate_epoch(val_loader, epoch)
-        
-        #update scheduler
+        val_metrics   = trainer.validate_epoch(val_loader, epoch)
         scheduler.step()
-        
-        #log metrics
-        logger.info(f"Train Loss: {train_metrics['loss']:.4f}")
-        logger.info(f"Val Loss: {val_metrics['loss']:.4f}")
-        logger.info(f"Val mIoU: {val_metrics['miou']:.4f}")
-        
-        #wandb logging
-        if args.wandb:
-            wandb.log({
-                'epoch': epoch,
-                'train_loss': train_metrics['loss'],
-                'val_loss': val_metrics['loss'],
-                'val_miou': val_metrics['miou'],
-                'learning_rate': optimizer.param_groups[0]['lr']
-            })
-        
-        #save checkpoint
-        is_best = val_metrics['loss'] < best_val_loss
+
+        logger.info(f"Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_metrics['loss']:.4f} | Val mIoU: {val_metrics['miou']:.4f}")
+
+        is_best = val_metrics["loss"] < best_loss
         if is_best:
-            best_val_loss = val_metrics['loss']
-        
-        checkpoint_manager.save_checkpoint(
-            model=hypernetwork,
+            best_loss = val_metrics["loss"]
+
+        ckpt_mgr.save_checkpoint(
+            model=hypernet,
             optimizer=optimizer,
             epoch=epoch,
-            train_loss=train_metrics['loss'],
-            val_loss=val_metrics['loss'],
+            train_loss=train_metrics["loss"],
+            val_loss=val_metrics["loss"],
             metrics=val_metrics,
             is_best=is_best
         )
-        
-        #early stopping check
-        if hasattr(config, 'early_stopping_patience'):
-            if trainer.early_stopping_counter >= config.early_stopping_patience:
-                logger.info("Early stopping triggered")
-                break
 
-    #final evaluation
-    logger.info("Training completed!")
-    
-    #load best model and evaluate
-    checkpoint_manager.load_best_model(hypernetwork, device)
-    final_metrics = trainer.validate_epoch(val_loader, config.epochs)
-    
-    logger.info(f"Final validation metrics:")
-    for key, value in final_metrics.items():
-        logger.info(f"  {key}: {value:.4f}")
-    
-    #save final model
-    final_path = os.path.join(args.checkpoint_dir, "final_model.pth")
-    torch.save({
-        'hypernetwork_state_dict': hypernetwork.state_dict(),
-        'text_encoder_state_dict': text_encoder.state_dict(),
-        'config': config.__dict__,
-        'final_metrics': final_metrics
-    }, final_path)
-    
-    logger.info(f"Final model saved: {final_path}")
-    
-    if args.wandb:
+    #finish
+    logger.info("Training complete.")
+    if args.use_wandb:
         wandb.finish()
 
 if __name__ == "__main__":
-    import importlib.util
     main()

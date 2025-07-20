@@ -1,152 +1,109 @@
-# Task-Aware Segment-Anything LoRA
+# Task-Aware Segment Anything with LoRA
 
-A hypernetwork that generates task-specific LoRA adapters for SAM's mask decoder based on textual descriptions.
+[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+A lightweight hypernetwork that generates LoRA adapters for the Segment Anything Model (SAM) based on natural language task descriptions.
 
-Implementing a hypernetwork that:
-- Takes textual task descriptions like ("segment all round orange fruits")
-- Generates LoRA adapters for SAM's mask decoder
-- Improves segmentation performance on specific tasks by 3-5 mIoU points
-- Runs efficiently on Colab T4 GPUs
+> 💡 **Note**: This was implemented on (free-tier) Colab T4 using a subset of COCO 2017 (val) for fast prototyping and learning. The pipeline is designed to scale to full datasets, multi-GPU training, and inference with minimal changes.
 
-## Quick Start
+## 📌Intuition
+- Why - Modern segmentation models are powerful but “one‑size‑fits‑all.” What if you need to “segment all red apples” or “highlight all suitcases” without retraining a massive model from scratch?
 
-### 1. Installation
-
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd task_aware_sam_lora
-
-# Install requirements
-pip install -r requirements.txt
-
-# Download SAM checkpoint
-wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth -P checkpoints/
-```
-
-### 2. Data Preparation
-
-```bash
-# Download COCO panoptic subset (10k samples)
-python scripts/download_coco.py --subset panoptic --size 10000
-```
-
-### 3. Training
-
-```bash
-# Train hypernetwork
-python scripts/train.py --config config/training_config.py --epochs 2
-```
-
-### 4. Demo
-
-```bash
-# Run interactive demo
-python scripts/demo.py --checkpoint checkpoints/best_model.pth
-```
-
-## Architecture
-
-### Hypernetwork Design
-- **Input**: Text embeddings from task descriptions
-- **Architecture**: Tiny transformer (< 0.5M params)
-- **Output**: LoRA adapter weights for SAM mask decoder
-- **LoRA Rank**: 2-4 (keeping total params minimal)
-
-### SAM Integration
-- **Frozen**: ViT-H image encoder (1.1B params)
-- **Trainable**: Mask decoder via LoRA (4M params)
-- **Memory**: Fits comfortably in T4's 16GB VRAM
-
-## 📊 Expected Results
-
-- **Baseline SAM mIoU**: ~65% on COCO panoptic
-- **Task-specific improvement**: +3-5 mIoU points
-- **Training time**: ~3 hours on T4 (2 epochs)
-- **Inference speed**: Near real-time on T4
-
-## 🔧 Key Features
-
-- **T4 Optimized**: Efficient memory usage and batch processing
-- **Modular Design**: Easy to extend and modify
-- **Interactive Demo**: Jupyter notebook with live visualization
-- **Comprehensive Evaluation**: Multiple metrics and visualizations
-
-## 📝 Usage Examples
-
-```python
-from src.models.hypernetwork import TaskAwareHyperNet
-from src.models.sam_wrapper import SAMWithLoRA
-
-# Load models
-hypernet = TaskAwareHyperNet.load_checkpoint('checkpoints/best_model.pth')
-sam = SAMWithLoRA('checkpoints/sam_vit_h_4b8939.pth')
-
-# Generate task-specific LoRA
-task_description = "segment all round red fruit"
-lora_weights = hypernet.generate_lora(task_description)
-
-# Apply LoRA to SAM
-sam.apply_lora(lora_weights)
-
-# Perform segmentation
-masks = sam.segment(image, task_description)
-```
-
-## 📈 Evaluation Metrics
-
-- **mIoU**: Primary metric for segmentation quality
-- **Precision/Recall**: Per-class performance
-- **Inference Time**: Speed benchmarks
-- **Memory Usage**: VRAM consumption tracking
-
-## 🎨 Visualization
-
-The project includes comprehensive visualization tools:
-- Segmentation mask overlays
-- Training loss curves
-- mIoU improvement charts
-- Task-specific performance analysis
-
-## 🔬 Technical Details
-
-### LoRA Implementation
-- **Target Layers**: All linear layers in mask decoder
-- **Rank**: Adaptive based on layer size (2-4)
-- **Alpha**: Learned per-task scaling factor
-
-### Hypernetwork Architecture
-- **Encoder**: Text → 512-dim embeddings
-- **Transformer**: 4 layers, 8 heads, 512 hidden
-- **Decoder**: 512-dim → LoRA weight tensors
-- **Total Params**: ~400K
-
-### Training Strategy
-- **Curriculum Learning**: Simple → complex tasks
-- **Data Augmentation**: Heavy augmentation for robustness
-- **Loss Function**: Combined segmentation + regularization
-- **Optimizer**: AdamW with cosine scheduling
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests and documentation
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- Meta AI for the Segment Anything Model
-- COCO dataset creators
-- LoRA and hypernetwork research communities
+- Inspiration - The [Text-to-LoRA: Instant Transformer Adaptation, 2025](https://arxiv.org/abs/2506.06105) paper shows how a small hypernetwork can generate LoRA adapters for transformers directly from text. How about generating LoRA adapters for Meta’s Segment‑Anything Model (SAM) based on task descriptions...
 
 ---
 
-**Ready to get started?** Open `notebooks/01_demo.ipynb` for an interactive introduction!
+## 📌Overview
+
+This repository introduces a task-aware segmentation pipeline by combining:
+
+- A **hypernetwork** that maps **text prompts** → **LoRA weights**
+- A **LoRA-injected SAM** (Segment Anything Model) for efficient mask prediction
+- An **evaluation module** using COCO-style metrics (mIoU, AP) via `pycocotools`
+
+---
+
+## 📌Architecture
+
+```
+          "segment all red apples"
+                    │
+           [Text Encoder (MiniLM)]
+                    │
+         ┌─────────────────────────┐
+         │  HyperNetwork Transformer│
+         └─────────────────────────┘
+                    │
+        LoRA Adapter Weights (dict)
+                    ↓
+    LoRA-injected SAM Mask Decoder (ViT-H frozen)
+                    ↓
+            Segmentation Prediction
+```
+
+---
+
+## 📌Packages
+
+| Component            | Description                                                        |
+|----------------------|--------------------------------------------------------------------|
+| TaskAwareHyperNet    | Transformer-based hypernetwork that maps text embeddings to LoRA weights |
+| LoRAAdapter          | Injects low-rank weight updates into SAM’s decoder                 |
+| SAMWithLoRA          | Wraps Meta’s official SAM with LoRA support                        |
+| TaskAwareDataset     | Loads COCO images + synthetic task prompts                         |
+| `notebook/.ipynb`         | train + visualization + eval                                             |
+
+---
+
+## 📌Inference & Evaluation
+
+You can visualize:
+- Original image
+- Task-specific predicted mask
+- Comparison across different prompts (e.g., “segment people”, “segment vehicles”)
+
+Pycocotools were used to compute COCO-style mIoU and AP on COCO val2017.
+
+```python
+from pycocotools.cocoeval import COCOeval
+
+#generate predictions.json from val images 
+#run COCOeval (included in sam_LoRA_visual.ipynb)
+```
+
+**Note:** On COCO val2017, with single-point prompting and LoRA-only tuning, we expect low raw AP but correct qualitative segmentations, especially on well-separated categories like humans, vehicles, fruits.
+
+---
+## 📌Learned concepts
+
+- **PyTorch** (Model building, training loops, mixed‑precision `torch.cuda.amp`, DataLoaders).
+- **Segment Anything (SAM)** - frozen ViT‑H image encoder + mask decoder, wrapped it in `SamWrapper` to inject LoRA adapters.
+- **LoRA (Low-Rank Adaptation)** for efficient tuning
+- **Hypernetworks** that generate weights on-the-fly - tiny transformer (4 layers, 8 heads, 512 d) that ingests text embeddings (from sentence-transformers/all‑MiniLM‑L6‑v2) and outputs a dictionary of LoRA weight tensors.
+- COCO instance annotations + pycocotools
+- Visualization tools (matplotlib, overlay masks)
+- Efficient training on constrained hardware (T4, batch=1)
+
+---
+
+## 📌Takeaways and next steps
+- On a small COCO val subset with single‑point prompts, we saw modest AP@0.5. To reach production‑level IoU, you’d integrate multi‑point or box prompts and evaluate on the full COCO split.
+
+- Training takes ~3 hrs for 2 epochs on a single T4 (batch size 1, mixed precision). At inference, generating LoRA + segmentation is near real‑time (~200 ms/image).
+
+- Add box or multi-point prompting for improved AP
+
+- Support full COCO panoptic splits and multi‑point sampling per instance for higher IoU
+
+- Extend hypernetwork to generate adapters for other prompt types (text + mask).
+
+- Benchmark against baseline SAM or segment-anything adapters
+
+---
+
+## 📚 References
+
+> R. Charakorn, E. Cetin, Y. Tang, and R. T. Lange, "Text-to-LoRA: Instant Transformer Adaption," in *Proc. 42nd Int. Conf. Mach. Learn. (ICML)*, Vancouver, Canada, 2025, vol. 267.  
+> Repository: (https://github.com/SakanaAI/text-to-lora)  
+- [Segment Anything Model (SAM) (Meta AI)](https://github.com/facebookresearch/segment-anything.git)
+- [COCO Dataset](https://cocodataset.org/)

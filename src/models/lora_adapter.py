@@ -1,4 +1,3 @@
-#src/models/lora_adapter.py
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional, Tuple
@@ -43,10 +42,8 @@ class LoRALayer(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """forward pass through LoRA layer"""
-        # x shape: [..., in_features]
-        # we need to output [..., out_features]
-        batch_shape = x.shape[:-1]                # e.g. [batch, tokens, ...]
-        x_flat = x.view(-1, self.in_features)     # [N, in_features]
+        batch_shape = x.shape[:-1]                
+        x_flat = x.view(-1, self.in_features)   
         lora_out = (x_flat @ self.lora_A @ self.lora_B) * self.scaling
         lora_out = self.dropout(lora_out)
         return lora_out.view(*batch_shape, self.out_features)
@@ -122,7 +119,6 @@ class LoRAAdapter(nn.Module):
         """add LoRA layers to target modules in the model"""
 
         def matches_target(targets, name):
-            # match if any target is a substring or exact
             return any(target in name for target in targets)
 
         def replace_linear_with_lora(module, name=""):

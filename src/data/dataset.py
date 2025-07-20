@@ -1,4 +1,3 @@
-#src/data/dataset.py
 import torch
 from torch.utils.data import Dataset
 import numpy as np
@@ -86,20 +85,19 @@ class TaskAwareDataset(Dataset):
         img_info = self.coco.imgs[image_id]
         split_folder = f"{self.split}2017"
         
-        # Fixed image path construction
+        #fixed image path construction
         img_path = os.path.join(self.data_dir, split_folder, img_info['file_name'])
         
-        # If the direct path doesn't exist, try alternative paths
+        #alternative paths
         if not os.path.exists(img_path):
             # Try with images subfolder (original COCO structure)
             img_path = os.path.join(self.data_dir, "images", split_folder, img_info['file_name'])
             
             if not os.path.exists(img_path):
-                # Try Kaggle dataset structure with coco2017 folder
+                #kaggle structure with coco2017 folder
                 img_path = os.path.join("/kaggle/input/coco-2017-dataset/coco2017", split_folder, img_info['file_name'])
                 
                 if not os.path.exists(img_path):
-                    # Final fallback - direct Kaggle paths
                     if self.split == "train":
                         img_path = os.path.join("/kaggle/input/coco-2017-dataset/coco2017/train2017", img_info['file_name'])
                     else:
@@ -170,7 +168,6 @@ class TaskAwareDataset(Dataset):
                     if isinstance(segm['counts'], list):
                         rle = coco_mask.frPyObjects(segm, img_info['height'], img_info['width'])
                     else:
-                        # already compressed RLE with counts as bytes
                         rle = segm
 
                     m = coco_mask.decode(rle)

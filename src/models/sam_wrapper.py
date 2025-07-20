@@ -22,23 +22,23 @@ class SAMWithLoRA(nn.Module):
         self.device = device
         self.model_type = model_type
         
-        # load model
+        #load model
         self.sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
         self.sam.to(device)
         
-        # freeze image encoder and prompt encoder
+        #freeze image encoder and prompt encoder
         self._freeze_encoders()
         
-        # create LoRA adapter
+        #create LoRA adapter
         if lora_config is None:
             lora_config = LoRAConfig()
         self.lora_adapter = lora_config.create_adapter()
         self.sam.mask_decoder = self.lora_adapter.add_lora_to_model(self.sam.mask_decoder).to(self.device)
         
-        # create predictor for inference
+        #create predictor for inference
         self.predictor = SamPredictor(self.sam)
         
-        # store original state for reset
+        #store original state 
         self.original_lora_state = self.lora_adapter.get_lora_params()
         
         print(f"SAM with LoRA initialized:")
@@ -79,7 +79,7 @@ class SAMWithLoRA(nn.Module):
                                  point_coords: Optional[torch.Tensor] = None,
                                  point_labels: Optional[torch.Tensor] = None,
                                  mask_input: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
-        """Validate and fix tensor shapes to ensure compatibility"""
+        """validate and fix tensor shapes to ensure compatibility"""
         
         # Fix image_embeddings shape
         if len(image_embeddings.shape) == 3:
@@ -87,7 +87,7 @@ class SAMWithLoRA(nn.Module):
         elif len(image_embeddings.shape) != 4:
             raise ValueError(f"Expected image_embeddings to have 3 or 4 dimensions, got {len(image_embeddings.shape)}")
         
-        # Fix point coordinates and labels
+        #fix point coordinates and labels
         if point_coords is not None:
             if len(point_coords.shape) == 2:
                 point_coords = point_coords.unsqueeze(0)
@@ -100,7 +100,7 @@ class SAMWithLoRA(nn.Module):
             elif len(point_labels.shape) == 0:
                 point_labels = point_labels.unsqueeze(0).unsqueeze(0)
         
-        # Fix mask input
+        #fix mask input
         if mask_input is not None:
             if len(mask_input.shape) == 2:
                 mask_input = mask_input.unsqueeze(0).unsqueeze(0)
@@ -120,12 +120,12 @@ class SAMWithLoRA(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through SAM with LoRA"""
         
-        # Validate and fix shapes
+        #validate and fix shapes
         image_embeddings, point_coords, point_labels, mask_input = self._validate_and_fix_shapes(
             image_embeddings, point_coords, point_labels, mask_input
         )
         
-        # Debug shapes
+        #debug shapes
         print(f"[DEBUG] image_embeddings shape: {image_embeddings.shape}")
         if point_coords is not None:
             print(f"[DEBUG] point_coords shape: {point_coords.shape}")
@@ -134,13 +134,13 @@ class SAMWithLoRA(nn.Module):
         if mask_input is not None:
             print(f"[DEBUG] mask_input shape: {mask_input.shape}")
         
-        # Prepare prompts
+        #prepare prompts
         points = (point_coords, point_labels) if point_coords is not None and point_labels is not None else None
         boxes = None
         masks = mask_input
         
         try:
-            # Prompt encoder
+            #prompt encoder
             sparse_embeddings, dense_embeddings = self.sam.prompt_encoder(
                 points=points,
                 boxes=boxes,
@@ -150,29 +150,28 @@ class SAMWithLoRA(nn.Module):
             print(f"[DEBUG] sparse_embeddings shape: {sparse_embeddings.shape}")
             print(f"[DEBUG] dense_embeddings shape: {dense_embeddings.shape}")
             
-            # Get image PE
+            #get image PE
             image_pe = self.sam.prompt_encoder.get_dense_pe()
             print(f"[DEBUG] image_pe shape: {image_pe.shape}")
             
-            # Ensure dense_embeddings has the right shape
             if len(dense_embeddings.shape) != 4:
-                # Try to reshape dense_embeddings to match expected 4D format
+                #trying to reshape dense_embeddings to match expected 4D format (error)
                 if dense_embeddings.numel() > 0:
                     batch_size = image_embeddings.shape[0]
-                    # Assuming dense_embeddings should match image_embeddings spatial dimensions
+                    #sssuming dense_embeddings should match image_embeddings spatial dimensions
                     expected_h, expected_w = image_embeddings.shape[-2:]
                     
                     if len(dense_embeddings.shape) == 3:
-                        # Reshape from (batch, hw, channels) to (batch, channels, h, w)
+                        #reshape from (batch, hw, channels) to (batch, channels, h, w)
                         channels = dense_embeddings.shape[-1]
                         dense_embeddings = dense_embeddings.transpose(1, 2).reshape(batch_size, channels, expected_h, expected_w)
                     elif len(dense_embeddings.shape) == 2:
-                        # Reshape from (batch, channels) to (batch, channels, h, w)
+                        #reshape from (batch, channels) to (batch, channels, h, w)
                         channels = dense_embeddings.shape[-1]
                         dense_embeddings = dense_embeddings.unsqueeze(-1).unsqueeze(-1)
                         dense_embeddings = dense_embeddings.expand(batch_size, channels, expected_h, expected_w)
                 else:
-                    # Create zero tensor with correct shape
+                    #create zero tensor with correct shape
                     dense_embeddings = torch.zeros(
                         image_embeddings.shape[0],
                         image_embeddings.shape[1],
@@ -184,7 +183,7 @@ class SAMWithLoRA(nn.Module):
             
             print(f"[DEBUG] dense_embeddings final shape: {dense_embeddings.shape}")
             
-            # Mask decoder (single mask output)
+            #mask decoder (single mask output)
             masks, iou_predictions = self.sam.mask_decoder(
                 image_embeddings=image_embeddings,
                 image_pe=image_pe,
@@ -315,7 +314,7 @@ class TaskAwareSAM(nn.Module):
         batch_size = images.shape[0]
         image_embeddings = []
         
-        # Process each image to get embeddings
+        #process each image to get embeddings
         for i in range(batch_size):
             try:
                 img_np = images[i].permute(1, 2, 0).cpu().numpy()
@@ -324,30 +323,29 @@ class TaskAwareSAM(nn.Module):
                 image_embeddings.append(emb)
             except Exception as e:
                 print(f"[ERROR] Failed to get embeddings for image {i}: {e}")
-                # Create a dummy embedding with the right shape
                 dummy_emb = torch.zeros((1, 256, 64, 64), device=self.device)  # Adjust dimensions as needed
                 image_embeddings.append(dummy_emb)
         
         image_embeddings = torch.stack(image_embeddings, dim=0)
         
-        # Generate LoRA parameters for the batch
+        #generate LoRA parameters for the batch
         lora_params_batch = self.hypernetwork(task_descriptions)
         
         all_masks, all_ious = [], []
         
-        # Process each sample in the batch
+        #process each sample in the batch
         for i in range(batch_size):
             try:
-                # Get LoRA parameters for this sample
+                #get LoRA parameters for this sample
                 sample_params = {k: v[i] for k, v in lora_params_batch.items()}
                 self.sam_lora.apply_lora(sample_params)
                 
-                # Prepare inputs for this sample
+                #prepare inputs for this sample
                 sample_image_emb = image_embeddings[i:i+1]
                 sample_point_coords = point_coords[i:i+1] if point_coords is not None else None
                 sample_point_labels = point_labels[i:i+1] if point_labels is not None else None
                 
-                # Forward pass
+                #forward pass
                 masks, iou_pred = self.sam_lora(
                     image_embeddings=sample_image_emb,
                     point_coords=sample_point_coords,
@@ -360,13 +358,13 @@ class TaskAwareSAM(nn.Module):
                 
             except Exception as e:
                 print(f"[ERROR] Failed to process sample {i}: {e}")
-                # Create dummy outputs
+                #dummy outputs
                 dummy_mask = torch.zeros((1, 1, 1024, 1024), device=self.device)  # Adjust dimensions as needed
                 dummy_iou = torch.zeros((1, 1), device=self.device)
                 all_masks.append(dummy_mask)
                 all_ious.append(dummy_iou)
         
-        # Concatenate results
+        #concatenate results
         all_masks = torch.cat(all_masks, dim=0)
         all_ious = torch.cat(all_ious, dim=0)
         

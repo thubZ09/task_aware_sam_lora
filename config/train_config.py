@@ -4,7 +4,7 @@ def get_t4_optimized_config() -> BaseConfig:
     """for T4 GPU"""
     
     model_config = ModelConfig(
-        # SAM settings
+        #SAM settings
         sam_model_type="vit_h",
         sam_checkpoint="checkpoints/sam_vit_h_4b8939.pth",
         
@@ -27,7 +27,7 @@ def get_t4_optimized_config() -> BaseConfig:
         
         image_size=1024,  
         use_augmentation=True,
-        aug_probability=0.3,  # Reduced for faster training
+        aug_probability=0.3,  #reduced for faster training
     )
     
     training_config = TrainingConfig(

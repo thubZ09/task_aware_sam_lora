@@ -211,7 +211,6 @@ class RegularizationLoss(nn.Module):
         """orthogonal regularization for matrix weights"""
         wtw = torch.matmul(weight.t(), weight)
         
-        # Calculate identity matrix nd orthogonal loss
         identity = torch.eye(wtw.size(0), device=weight.device)
         orthogonal_loss = torch.norm(wtw - identity, p='fro')
         

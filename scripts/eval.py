@@ -11,11 +11,10 @@ from typing import Dict, List, Tuple
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from models.hypernetwork import TaskAwareHypernetwork
-from models.sam_lora import SAMLoRA
-from data.dataset import TaskAwareDataset
-from training.metrics import SegmentationMetrics, calculate_mask_metrics
-from utils.coco_utils import load_coco_categories
+from src.models.hypernetwork import TaskAwareHyperNet
+from src.models.sam_wrapper import SAMWithLoRA
+from src.data.dataset import TaskAwareDataset
+from src.training.metrics import SegmentationMetrics, calculate_mask_metrics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -133,7 +132,7 @@ def evaluate_baseline(sam_lora: SAMLoRA, dataset: TaskAwareDataset,
     """evaluate baseline SAM without LoRA"""
     
     sam_lora.eval()
-    sam_lora.remove_lora()  #remove any LoRA adapters
+    sam_lora.remove_lora()  #rm lora adaptors
     
     metrics_calc = SegmentationMetrics()
     all_metrics = []

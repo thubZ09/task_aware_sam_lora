@@ -35,7 +35,7 @@ class ModelConfig:
     hypernetwork_num_layers: int = 4
     hypernetwork_num_heads: int = 8
     hypernetwork_dropout: float = 0.1
-    hypernetwork_max_lora_params: int = 1000000  # 1M params max
+    hypernetwork_max_lora_params: int = 1000000  
 
 @dataclass
 class DataConfig:
@@ -102,25 +102,25 @@ class TrainingConfig:
 class SystemConfig:
     """Config for system and hardware."""
     
-    # Device settings
+    #device settings
     device: str = "cuda"
     seed: int = 42
     
-    # Memory optimization
-    max_memory_gb: int = 14  # T4 has 16GB, leave some buffer
+    #memory optimization
+    max_memory_gb: int = 14  
     gradient_checkpointing: bool = True
     dataloader_workers: int = 2
     
-    # Logging
+    #logging
     log_level: str = "INFO"
     log_dir: str = "logs"
     
-    # Experiment tracking
+    #eperiment tracking
     use_wandb: bool = True
     wandb_project: str = "task-aware-sam-lora"
     wandb_entity: Optional[str] = None
     
-    # Paths
+    #paths
     checkpoint_dir: str = "checkpoints"
     output_dir: str = "outputs"
     cache_dir: str = "cache"
@@ -141,7 +141,6 @@ class BaseConfig:
         os.makedirs(self.system.log_dir, exist_ok=True)
         os.makedirs(self.system.cache_dir, exist_ok=True)
         
-        # Validate configuration
         self._validate_config()
     
     def _validate_config(self):

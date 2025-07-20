@@ -14,8 +14,8 @@ import wandb
 
 from src.training.loss import TaskAwareLoss
 from src.training.metrics import SegmentationMetrics
-from src.utils.checkpoint import save_checkpoint, load_checkpoint
-from src.utils.visualization import visualize_predictions
+from src.utils.checkpoint import save_hypernetwork_checkpoint, CheckpointManager
+from src.utils.visual import visualize_segmentation_results
 
 class TaskAwareTrainer:
     """trainer with hypernetwork"""
@@ -127,7 +127,7 @@ class TaskAwareTrainer:
     def train_epoch(self) -> Dict[str, float]:
         """Train for one epoch."""
         self.hypernetwork.train()
-        self.sam_model.eval()  #SAM stays in eval mode
+        self.sam_model.eval()  
         
         running_loss = 0.0
         running_metrics = {}

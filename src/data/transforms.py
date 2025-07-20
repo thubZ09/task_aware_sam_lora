@@ -28,9 +28,7 @@ class SAMTransform:
         return image
 
 
-class TaskAwareTransform:
-    """transform pipeline for task-aware training"""
-    
+class TaskAwareTransform:    
     def __init__(
         self,
         size: int = 1024,
@@ -85,7 +83,6 @@ class TaskAwareTransform:
         return sample
     
     def _apply_augmentations(self, image: Image.Image) -> Image.Image:
-        """aply data augmentations"""
         #random horizontal flip
         if random.random() < 0.5:
             image = F.hflip(image)
@@ -101,7 +98,6 @@ class TaskAwareTransform:
         return image
     
     def _scale_points(self, points: np.ndarray, orig_size: Tuple[int, int], new_size: Tuple[int, int]) -> np.ndarray:
-        """scale point coordinates to new image size"""
         scale_x = new_size[0] / orig_size[0]
         scale_y = new_size[1] / orig_size[1]
         
@@ -112,9 +108,7 @@ class TaskAwareTransform:
         return points
 
 
-class ResizeTransform:
-    """simple resize transform"""
-    
+class ResizeTransform:    
     def __init__(self, size: int = 1024):
         self.size = size
     
@@ -124,9 +118,7 @@ class ResizeTransform:
         return F.resize(image, (self.size, self.size))
 
 
-class MaskTransform:
-    """transform for mask processing"""
-    
+class MaskTransform:    
     def __init__(self, size: int = 1024):
         self.size = size
     
@@ -141,9 +133,7 @@ class MaskTransform:
         return mask.squeeze(0)
 
 
-class PointTransform:
-    """transform for point coordinates"""
-    
+class PointTransform:    
     def __init__(self, orig_size: Tuple[int, int], new_size: Tuple[int, int]):
         self.scale_x = new_size[0] / orig_size[0]
         self.scale_y = new_size[1] / orig_size[1]
@@ -159,9 +149,7 @@ class PointTransform:
         return points
 
 
-class RandomCrop:
-    """random crop augmentation"""
-    
+class RandomCrop:    
     def __init__(self, size: int, padding: int = 32):
         self.size = size
         self.padding = padding
@@ -176,9 +164,7 @@ class RandomCrop:
         
         return image
 
-
 class RandomHorizontalFlip:
-    """random horizontal flip with mask support"""
     
     def __init__(self, p: float = 0.5):
         self.p = p
@@ -197,7 +183,6 @@ class RandomHorizontalFlip:
 
 
 class Compose:
-    """compose multiple transforms"""
     
     def __init__(self, transforms):
         self.transforms = transforms
@@ -222,7 +207,6 @@ def get_sam_transforms(size: int = 1024) -> SAMTransform:
 
 #util functions
 def denormalize_image(image: torch.Tensor) -> torch.Tensor:
-    """denormalize image for visualization"""
     pixel_mean = torch.tensor([123.675, 116.28, 103.53]).view(3, 1, 1)
     pixel_std = torch.tensor([58.395, 57.12, 57.375]).view(3, 1, 1)
     
@@ -231,9 +215,7 @@ def denormalize_image(image: torch.Tensor) -> torch.Tensor:
     
     return torch.clamp(image, 0, 1)
 
-
 def resize_mask(mask: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
-    """resize mask to target size"""
     if mask.dim() == 2:
         mask = mask.unsqueeze(0).unsqueeze(0)
     elif mask.dim() == 3:
@@ -244,7 +226,6 @@ def resize_mask(mask: torch.Tensor, size: Tuple[int, int]) -> torch.Tensor:
 
 
 def augment_points(points: torch.Tensor, image_size: Tuple[int, int]) -> torch.Tensor:
-    """add noise to point coordinates for augmentation"""
     noise = torch.randn_like(points) * 5  # 5 pixel noise
     points = points + noise
 
