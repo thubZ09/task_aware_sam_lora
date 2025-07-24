@@ -4,7 +4,7 @@
 
 A lightweight hypernetwork that generates LoRA adapters for the Segment Anything Model (SAM) based on natural language task descriptions.
 
-> 💡 **Note**: This was implemented on (free-tier) Colab T4 using a subset of COCO 2017 (val) for fast prototyping and learning. The pipeline is designed to scale to full datasets, multi-GPU training, and inference with minimal changes.
+> 💡 **Note**: This was implemented on (free-tier) Colab T4 using a subset of COCO 2017 (val) for fast prototyping and learning. The pipeline can be scaled to full datasets, multi-GPU training, and inference with minimal changes.
 
 ## 📌Intuition
 - Why - Modern segmentation models are powerful but “one‑size‑fits‑all.” What if you need to “segment all red apples” or “highlight all suitcases” without retraining a massive model from scratch?
